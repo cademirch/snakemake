@@ -15,6 +15,7 @@ from collections import defaultdict, Counter, deque, namedtuple
 from itertools import chain, filterfalse, groupby
 from functools import partial
 from pathlib import Path
+from yaml import safe_load
 import uuid
 import subprocess
 from snakemake.interfaces import DAGExecutorInterface
@@ -2620,6 +2621,12 @@ class DAG(DAGExecutorInterface):
                     files.add(env_path)
 
         for f in self.workflow.configfiles:
+            with open(f, "r") as config:
+                opts = safe_load(config)
+                sample_sheet = opts["samples"]
+                resource_config = opts["resource_config"]
+                files.add(sample_sheet)
+                files.add(resource_config)
             files.add(f)
 
         # get git-managed files
