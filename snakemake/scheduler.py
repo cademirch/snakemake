@@ -918,7 +918,7 @@ class JobScheduler(JobSchedulerExecutorInterface):
             )
         try:
             solver = (
-                pulp.get_solver(self.scheduler_ilp_solver)
+                pulp.getSolver(self.scheduler_ilp_solver)
                 if self.scheduler_ilp_solver
                 else pulp.apis.LpSolverDefault
             )

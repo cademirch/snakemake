@@ -697,17 +697,18 @@ class GoogleLifeSciencesExecutor(ClusterExecutor):
         We do this, and then obtain from the instance and extract.
         """
         # Workflow sources for cloud executor must all be under same workdir root
-        for filename in self.workflow_sources:
-            if self.workdir not in os.path.realpath(filename):
-                raise WorkflowError(
-                    "All source files must be present in the working directory, "
-                    "{workdir} to be uploaded to a build package that respects "
-                    "relative paths, but {filename} was found outside of this "
-                    "directory. Please set your working directory accordingly, "
-                    "and the path of your Snakefile to be relative to it.".format(
-                        workdir=self.workdir, filename=filename
-                    )
-                )
+        # for filename in self.workflow_sources:
+
+        #     if self.workdir not in os.path.realpath(filename):
+        #         raise WorkflowError(
+        #             "All source files must be present in the working directory, "
+        #             "{workdir} to be uploaded to a build package that respects "
+        #             "relative paths, but {filename} was found outside of this "
+        #             "directory. Please set your working directory accordingly, "
+        #             "and the path of your Snakefile to be relative to it.".format(
+        #                 workdir=self.workdir, filename=filename
+        #             )
+        #         )
 
         # We will generate a tar.gz package, renamed by hash
         tmpname = next(tempfile._get_candidate_names())
@@ -717,6 +718,7 @@ class GoogleLifeSciencesExecutor(ClusterExecutor):
         # Add all workflow_sources files
         for filename in self.workflow_sources:
             arcname = filename.replace(self.workdir + os.path.sep, "")
+
             tar.add(filename, arcname=arcname)
 
         tar.close()
