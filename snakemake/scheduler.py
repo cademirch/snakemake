@@ -375,9 +375,9 @@ class JobScheduler(JobSchedulerExecutorInterface):
                 if self.print_progress:
                     if job.is_group():
                         for j in job:
-                            logger.job_finished(jobid=j.jobid)
+                            logger.info(f"Job finished: {j.jobid}")
                     else:
-                        logger.job_finished(jobid=job.jobid)
+                        logger.info(f"Job finished {job.jobid}")
                     self.progress()
 
                 await self.workflow.dag.finish(
@@ -786,4 +786,4 @@ class JobScheduler(JobSchedulerExecutorInterface):
 
     def progress(self):
         """Display the progress."""
-        logger.progress(done=self.finished_jobs, total=len(self.workflow.dag))
+        logger.info("progress", done=self.finished_jobs, total=len(self.workflow.dag))

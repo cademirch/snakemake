@@ -67,7 +67,7 @@ from snakemake.jobs import (
     Reason,
 )
 from snakemake.settings import SharedFSUsage
-from snakemake.logging import logger
+from snakemake.logging import logger, format_wildcards
 from snakemake.output_index import OutputIndex
 from snakemake.sourcecache import LocalSourceFile, SourceFile
 from snakemake.settings import ChangeType, Batch
@@ -753,6 +753,20 @@ class DAG(DAGExecutorInterface, DAGReportInterface):
                 f.touch_or_create()
                 assert os.path.exists(f)
 
+    @staticmethod
+    def debug_message(msg:dict) -> str:
+        """Generates debug_dag message."""
+        if "file" in msg:
+            return "file {file}, {msg}, {exception}".format(file=msg["file"],msg=msg["msg"],exception=str(msg["exception"],))
+            
+        else:
+            job = msg["job"]
+            return "{status} job: {name}, wildcards: {wc}".format(
+                    status=msg["status"],
+                    name=job.rule.name,
+                    wc=format_wildcards(job.wildcards),
+            )
+
     def temp_input(self, job: Union[Job, GroupJob]):
         if job.is_group():
             skip = {f for j in job for f in j.output}
@@ -931,7 +945,7 @@ class DAG(DAGExecutorInterface, DAGReportInterface):
             )
 
         for i, job in enumerate(jobs):
-            logger.dag_debug(dict(status="candidate", job=job))
+            logger.debug(self.debug_message(dict(status="candidate", job=job)) ,**dict(status="candidate", job=job))
             if file in job.input:
                 cycles.append(job)
                 continue
@@ -995,10 +1009,15 @@ class DAG(DAGExecutorInterface, DAGReportInterface):
         )
         if ambiguities and not self.workflow.execution_settings.ignore_ambiguity:
             raise AmbiguousRuleException(file, producer, ambiguities[0])
-        logger.dag_debug(dict(status="selected", job=producer))
+        logger.debug(self.debug_message(dict(status="selected", job=producer)),**dict(status="selected", job=producer))
         if exceptions:
-            logger.dag_debug(
-                dict(
+            
+            logger.debug(self.debug_message(dict(
+                    file=file,
+                    msg="Producer found, hence exceptions are ignored.",
+                    exception=WorkflowError(*exceptions),
+                ))
+                **dict(
                     file=file,
                     msg="Producer found, hence exceptions are ignored.",
                     exception=WorkflowError(*exceptions),
@@ -1076,8 +1095,8 @@ class DAG(DAGExecutorInterface, DAGReportInterface):
                         self.delete_job(job, recursive=False)  # delete job from tree
                         raise ex
                     else:
-                        logger.dag_debug(
-                            dict(
+                        logger.debug(
+                            **dict(
                                 file=res.file,
                                 msg="No producers found, but file is present on disk.",
                                 exception=ex,

@@ -535,6 +535,7 @@ class Job(AbstractJob, SingleJobExecutorInterface, JobReportInterface):
             (self.rule.name + "".join(self.output)).encode("utf-8")
         ).decode("utf-8")
 
+
     async def inputsize(self):
         """
         Return the size of the input files.
@@ -978,8 +979,7 @@ class Job(AbstractJob, SingleJobExecutorInterface, JobReportInterface):
             if self.benchmark is not None
             else None
         )
-        logger.job_info(
-            jobid=self.dag.jobid(self),
+        log_context = dict(jobid=self.dag.jobid(self),
             msg=self.message,
             name=self.rule.name,
             # in dryrun, we don't want to display a decision whether local or not
@@ -1001,9 +1001,9 @@ class Job(AbstractJob, SingleJobExecutorInterface, JobReportInterface):
             indent=indent,
             is_checkpoint=self.rule.is_checkpoint,
             printshellcmd=printshellcmd,
-            is_handover=self.rule.is_handover,
-        )
-        logger.shellcmd(self.shellcmd, indent=indent)
+            shellcmd=self.shellcmd,
+            is_handover=self.rule.is_handover,)
+        logger.info(f"Rule: {self.rule.name}", **log_context)
 
     def get_log_error_info(
         self, msg=None, indent=False, aux_logs: Optional[list] = None, **kwargs
@@ -1025,7 +1025,7 @@ class Job(AbstractJob, SingleJobExecutorInterface, JobReportInterface):
     def log_error(
         self, msg=None, indent=False, aux_logs: Optional[list] = None, **kwargs
     ):
-        logger.job_error(**self.get_log_error_info(msg, indent, aux_logs, **kwargs))
+        logger.info(msg, **self.get_log_error_info(msg, indent, aux_logs, **kwargs))
 
     def register(self, external_jobid: Optional[str] = None):
         self.dag.workflow.persistence.started(self, external_jobid)

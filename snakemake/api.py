@@ -49,7 +49,7 @@ from snakemake_interface_report_plugins.registry import ReportPluginRegistry
 
 from snakemake.workflow import Workflow
 from snakemake.exceptions import print_exception
-from snakemake.logging import setup_logger, logger
+from snakemake.logging import logger
 from snakemake.shell import shell
 from snakemake.common import (
     MIN_PY_VERSION,
@@ -138,7 +138,7 @@ class SnakemakeApi(ApiBase):
 
         self._check_is_in_context()
 
-        self.setup_logger(mode=workflow_settings.exec_mode)
+        # self.setup_logger(mode=workflow_settings.exec_mode)
 
         self._check_default_storage_provider(storage_settings=storage_settings)
 
@@ -160,7 +160,8 @@ class SnakemakeApi(ApiBase):
     def _cleanup(self):
         """Cleanup the workflow."""
         if not self.output_settings.keep_logger:
-            logger.cleanup()
+            # logger.cleanup()
+            pass
         if self._workflow_api is not None:
             self._workflow_api._workdir_handler.change_back()
             if self._workflow_api._workflow_store is not None:
@@ -240,25 +241,25 @@ class SnakemakeApi(ApiBase):
             linemaps = self._workflow_api._workflow_store.linemaps
         print_exception(ex, linemaps)
 
-    def setup_logger(
-        self,
-        stdout: bool = False,
-        mode: ExecMode = ExecMode.DEFAULT,
-        dryrun: bool = False,
-    ):
-        if not self.output_settings.keep_logger:
-            setup_logger(
-                handler=self.output_settings.log_handlers,
-                quiet=self.output_settings.quiet,
-                nocolor=self.output_settings.nocolor,
-                debug=self.output_settings.verbose,
-                printshellcmds=self.output_settings.printshellcmds,
-                debug_dag=self.output_settings.debug_dag,
-                stdout=stdout or self.output_settings.stdout,
-                mode=mode,
-                show_failed_logs=self.output_settings.show_failed_logs,
-                dryrun=dryrun,
-            )
+    # def setup_logger(
+    #     self,
+    #     stdout: bool = False,
+    #     mode: ExecMode = ExecMode.DEFAULT,
+    #     dryrun: bool = False,
+    # ):
+    #     if not self.output_settings.keep_logger:
+    #         setup_logger(
+    #             handler=self.output_settings.log_handlers,
+    #             quiet=self.output_settings.quiet,
+    #             nocolor=self.output_settings.nocolor,
+    #             debug=self.output_settings.verbose,
+    #             printshellcmds=self.output_settings.printshellcmds,
+    #             debug_dag=self.output_settings.debug_dag,
+    #             stdout=stdout or self.output_settings.stdout,
+    #             mode=mode,
+    #             show_failed_logs=self.output_settings.show_failed_logs,
+    #             dryrun=dryrun,
+    #         )
 
     def _check_is_in_context(self):
         if not self._is_in_context:
@@ -523,11 +524,11 @@ class DAGApi(ApiBase):
                 "For local execution, --shared-fs-usage has to be unrestricted."
             )
 
-        self.snakemake_api.setup_logger(
-            stdout=executor_plugin.common_settings.dryrun_exec,
-            mode=self.workflow_api.workflow_settings.exec_mode,
-            dryrun=executor_plugin.common_settings.dryrun_exec,
-        )
+        # self.snakemake_api.setup_logger(
+        #     stdout=executor_plugin.common_settings.dryrun_exec,
+        #     mode=self.workflow_api.workflow_settings.exec_mode,
+        #     dryrun=executor_plugin.common_settings.dryrun_exec,
+        # )
 
         if executor_plugin.common_settings.local_exec:
             if (
@@ -578,7 +579,7 @@ class DAGApi(ApiBase):
             or not executor_plugin.common_settings.local_exec
         )
 
-        logger.setup_logfile()
+        # logger.setup_logfile()
 
         workflow = self.workflow_api._workflow
         workflow.execution_settings = execution_settings

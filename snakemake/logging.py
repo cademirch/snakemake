@@ -14,6 +14,60 @@ import threading
 from functools import partial
 import inspect
 import textwrap
+from loguru import logger as _logger
+from rich.console import Console
+
+console = Console(stderr=True)
+
+
+class LoggerConfig:
+    def __init__(self) -> None:
+        from snakemake_interface_executor_plugins.settings import ExecMode
+
+        self.printshellcmds = False
+        self.printreason = False
+        self.debug_dag = False
+        self.quiet = set()
+        self.logfile = None
+        self.last_msg_was_job_info = False
+        self.mode = ExecMode.DEFAULT
+        self.show_failed_logs = False
+        self.logfile_handler = None
+        self.dryrun = False
+        self._setup_logger()
+
+    def _setup_logger(self):
+        _logger.remove()
+        _logger.add(
+            console.print,
+            level="TRACE",
+            format=self._log_formatter,
+            colorize=True,
+        )
+
+    def _log_formatter(self, record: dict) -> str:
+        """
+        Log message formatter
+        Source: https://github.com/Textualize/rich/issues/2416#issuecomment-1193773381
+        """
+        color_map = {
+            "TRACE": "dim blue",
+            "DEBUG": "cyan",
+            "INFO": "bold",
+            "SUCCESS": "bold green",
+            "WARNING": "yellow",
+            "ERROR": "bold red",
+            "CRITICAL": "bold white on red",
+        }
+        lvl_color = color_map.get(record["level"].name, "cyan")
+        return (
+            "[not bold green]{time:YYYY/MM/DD HH:mm:ss}[/not bold green] | {level.icon}"
+            + f"  - [{lvl_color}]{{message}}[/{lvl_color}]"
+        )
+
+
+logger_config = LoggerConfig()
+logger = _logger
 
 
 def get_default_exec_mode():
@@ -82,227 +136,6 @@ class ColorizingStreamHandler(_logging.StreamHandler):
             message.insert(0, self.COLOR_SEQ % (30 + self.colors[record.levelname]))
             message.append(self.RESET_SEQ)
         return "".join(message)
-
-
-class SlackLogger:
-    def __init__(self):
-        from slack_sdk import WebClient
-
-        self.token = os.getenv("SLACK_TOKEN")
-        if not self.token:
-            print(
-                "The use of slack logging requires the user to set a user specific slack User OAuth token to the SLACK_TOKEN environment variable. Set this variable by 'export SLACK_TOKEN=your_token'. To generate your token please visit https://api.slack.com/authentication/token-types#user."
-            )
-            exit(-1)
-        self.slack = WebClient(self.token)
-        # Check for success
-        try:
-            auth = self.slack.auth_test().data
-        except Exception:
-            print(
-                "Slack connection failed. Please compare your provided slack token exported in the SLACK_TOKEN environment variable with your online token (app). This token can be tested at https://api.slack.com/methods/auth.test/test. A different token can be set up by 'export SLACK_TOKEN=your_token'."
-            )
-            exit(-1)
-        self.own_id = auth["user_id"]
-        self.error_occured = False
-        self.slack.chat_postMessage(
-            channel=self.own_id, text="Snakemake has connected."
-        )
-
-    def log_handler(self, msg):
-        if "error" in msg["level"] and not self.error_occured:
-            self.slack.chat_postMessage(
-                channel=self.own_id, text="At least one error occurred."
-            )
-            self.error_occured = True
-
-        if msg["level"] == "progress" and msg["done"] == msg["total"]:
-            # workflow finished
-            self.slack.chat_postMessage(channel=self.own_id, text="Workflow complete.")
-
-
-class WMSLogger:
-    def __init__(self, address=None, args=None, metadata=None):
-        """A WMS monitor is a workflow management system logger to enable
-        monitoring with something like Panoptes. The address corresponds to
-        the --wms-monitor argument, and args should be a list of key/value
-        pairs with extra arguments to send to identify the workflow. We require
-        the logging server to exist and receive creating a workflow to start
-        the run, but we don't exit with error if any updates fail, as the
-        workflow will already be running and it would not be worth stopping it.
-        """
-
-        from snakemake.resources import DefaultResources
-
-        self.address = address or "http:127.0.0.1:5000"
-        self.args = list(map(DefaultResources.decode_arg, args)) if args else []
-        self.args = {item[0]: item[1] for item in list(self.args)}
-
-        self.metadata = metadata or {}
-
-        # A token is suggested but not required, depends on server
-        self.token = os.getenv("WMS_MONITOR_TOKEN")
-        self.service_info()
-
-        # Create or retrieve the existing workflow
-        self.create_workflow()
-
-    def service_info(self):
-        """Service Info ensures that the server is running. We exit on error
-        if this isn't the case, so the function can be called in init.
-        """
-        import requests
-
-        # We first ensure that the server is running, period
-        response = requests.get(
-            f"{self.address}/api/service-info", headers=self._headers
-        )
-        if response.status_code != 200:
-            sys.stderr.write(f"Problem with server: {self.address} {os.linesep}")
-            sys.exit(-1)
-
-        # And then that it's ready to be interacted with
-        if response.json().get("status") != "running":
-            sys.stderr.write(
-                f"The status of the server {self.address} is not in 'running' mode {os.linesep}"
-            )
-            sys.exit(-1)
-
-    def create_workflow(self):
-        """Creating a workflow means pinging the wms server for a new id, or
-        if providing an argument for an existing workflow, ensuring that
-        it exists and receiving back the same identifier.
-        """
-        import requests
-
-        # Send the working directory to the server
-        workdir = (
-            os.getcwd()
-            if not self.metadata.get("directory")
-            else os.path.abspath(self.metadata["directory"])
-        )
-
-        # Prepare a request that has metadata about the job
-        metadata = {
-            "command": self.metadata.get("command"),
-            "workdir": workdir,
-        }
-
-        response = requests.get(
-            f"{self.address}/create_workflow",
-            headers=self._headers,
-            params=self.args,
-            data=metadata,
-        )
-
-        # Extract the id from the response
-        id = response.json()["id"]
-
-        # Check the response, will exit on any error
-        self.check_response(response, "/create_workflow")
-
-        # Provide server parameters to the logger
-        headers = (
-            {"Content-Type": "application/json"}
-            if self._headers is None
-            else {**self._headers, **{"Content-Type": "application/json"}}
-        )
-
-        # Send the workflow name to the server
-        response_change_workflow_name = requests.put(
-            f"{self.address }/api/workflow/{id}",
-            headers=headers,
-            data=json.dumps(self.args),
-        )
-        # Check the response, will exit on any error
-        self.check_response(response_change_workflow_name, f"/api/workflow/{id}")
-
-        # Provide server parameters to the logger
-        self.server = {"url": self.address, "id": id}
-
-    def check_response(self, response, endpoint="wms monitor request"):
-        """A helper function to take a response and check for an expected set of
-        error codes, 404 (not found), 401 (requires authorization), 403 (permission
-        denied), 500 (server error) and 200 (success).
-        """
-        status_code = response.status_code
-        # Cut out early on success
-        if status_code == 200:
-            return
-
-        if status_code == 404:
-            sys.stderr.write(f"The wms {endpoint} endpoint was not found")
-            sys.exit(-1)
-        elif status_code == 401:
-            sys.stderr.write(
-                "Authorization is required with a WMS_MONITOR_TOKEN in the environment"
-            )
-            sys.exit(-1)
-        elif status_code == 500:
-            sys.stderr.write(
-                f"There was a server error when trying to access {endpoint}"
-            )
-            sys.exit(-1)
-        elif status_code == 403:
-            sys.stderr.write("Permission is denied to %s." % endpoint)
-            sys.exit(-1)
-
-        # Any other response code is not acceptable
-        sys.stderr.write(
-            f"The {endpoint} response code {response.status_code} is not recognized."
-        )
-
-    @property
-    def _headers(self):
-        """return authenticated headers if the user has provided a token"""
-        headers = None
-        if self.token:
-            headers = {"Authorization": "Bearer %s" % self.token}
-        return headers
-
-    def _parse_message(self, msg):
-        """Given a message dictionary, we want to loop through the key, value
-        pairs and convert some attributes to strings (e.g., jobs are fine to be
-        represented as names) and return a dictionary.
-        """
-        result = {}
-        for key, value in msg.items():
-            # For a job, the name is sufficient
-            if key == "job":
-                result[key] = str(value)
-
-            # For an exception, return the name and a message
-            elif key == "exception":
-                result[key] = "{}: {}".format(
-                    msg["exception"].__class__.__name__,
-                    msg["exception"] or "Exception",
-                )
-
-            # All other fields are json serializable
-            else:
-                result[key] = value
-
-        # Return a json dumped string
-        return json.dumps(result)
-
-    def log_handler(self, msg):
-        """Custom wms server log handler.
-
-        Sends the log to the server.
-
-        Args:
-            msg (dict):    the log message dictionary
-        """
-        import requests
-
-        url = self.server["url"] + "/update_workflow_status"
-        server_info = {
-            "msg": self._parse_message(msg),
-            "timestamp": time.asctime(),
-            "id": self.server["id"],
-        }
-        response = requests.post(url, data=server_info, headers=self._headers)
-        self.check_response(response, "/update_workflow_status")
 
 
 class Logger:
@@ -718,54 +551,54 @@ def format_percentage(done, total):
     return fmt(fraction)
 
 
-logger = Logger()
+# logger = Logger()
 
 
-def setup_logger(
-    handler=[],
-    quiet=False,
-    printshellcmds=False,
-    printreason=True,
-    debug_dag=False,
-    nocolor=False,
-    stdout=False,
-    debug=False,
-    mode=None,
-    show_failed_logs=False,
-    dryrun=False,
-):
-    from snakemake.settings import Quietness
+# def setup_logger(
+#     handler=[],
+#     quiet=False,
+#     printshellcmds=False,
+#     printreason=True,
+#     debug_dag=False,
+#     nocolor=False,
+#     stdout=False,
+#     debug=False,
+#     mode=None,
+#     show_failed_logs=False,
+#     dryrun=False,
+# ):
+#     from snakemake.settings import Quietness
 
-    if mode is None:
-        mode = get_default_exec_mode()
+#     if mode is None:
+#         mode = get_default_exec_mode()
 
-    if quiet is None:
-        # not quiet at all
-        quiet = set()
-    elif isinstance(quiet, bool):
-        if quiet:
-            quiet = {Quietness.PROGRESS, Quietness.RULES}
-        else:
-            quiet = set()
-    elif not isinstance(quiet, set):
-        raise ValueError(
-            "Unsupported value provided for quiet mode (either bool, None or set allowed)."
-        )
+#     if quiet is None:
+#         # not quiet at all
+#         quiet = set()
+#     elif isinstance(quiet, bool):
+#         if quiet:
+#             quiet = {Quietness.PROGRESS, Quietness.RULES}
+#         else:
+#             quiet = set()
+#     elif not isinstance(quiet, set):
+#         raise ValueError(
+#             "Unsupported value provided for quiet mode (either bool, None or set allowed)."
+#         )
 
-    logger.log_handler.extend(handler)
+#     logger.log_handler.extend(handler)
 
-    # console output only if no custom logger was specified
-    stream_handler = ColorizingStreamHandler(
-        nocolor=nocolor,
-        stream=sys.stdout if stdout else sys.stderr,
-        mode=mode,
-    )
-    logger.set_stream_handler(stream_handler)
-    logger.set_level(_logging.DEBUG if debug else _logging.INFO)
-    logger.quiet = quiet
-    logger.printshellcmds = printshellcmds
-    logger.printreason = printreason
-    logger.debug_dag = debug_dag
-    logger.mode = mode
-    logger.dryrun = dryrun
-    logger.show_failed_logs = show_failed_logs
+#     # console output only if no custom logger was specified
+#     stream_handler = ColorizingStreamHandler(
+#         nocolor=nocolor,
+#         stream=sys.stdout if stdout else sys.stderr,
+#         mode=mode,
+#     )
+#     logger.set_stream_handler(stream_handler)
+#     logger.set_level(_logging.DEBUG if debug else _logging.INFO)
+#     logger.quiet = quiet
+#     logger.printshellcmds = printshellcmds
+#     logger.printreason = printreason
+#     logger.debug_dag = debug_dag
+#     logger.mode = mode
+#     logger.dryrun = dryrun
+#     logger.show_failed_logs = show_failed_logs

@@ -1152,7 +1152,7 @@ class Workflow(WorkflowExecutorInterface):
                     if shell_exec is not None:
                         logger.info(f"Using shell: {shell_exec}")
                     if not self.local_exec:
-                        logger.resources_info(f"Provided remote nodes: {self.nodes}")
+                        logger.info(f"Provided remote nodes: {self.nodes}")
                     else:
                         if self._cores is not None:
                             warning = (
@@ -1160,16 +1160,16 @@ class Workflow(WorkflowExecutorInterface):
                                 if self._cores > 1
                                 else " (use --cores to define parallelism)"
                             )
-                            logger.resources_info(
+                            logger.info(
                                 f"Provided cores: {self._cores}{warning}"
                             )
-                            logger.resources_info(
+                            logger.info(
                                 "Rules claiming more threads will be scaled down."
                             )
 
                     provided_resources = format_resources(self.global_resources)
                     if provided_resources:
-                        logger.resources_info(
+                        logger.info(
                             f"Provided resources: {provided_resources}"
                         )
 
@@ -1191,14 +1191,14 @@ class Workflow(WorkflowExecutorInterface):
                         logger.info("Singularity containers: ignored")
 
                     if self.exec_mode == ExecMode.DEFAULT:
-                        logger.run_info("\n".join(self.dag.stats()))
+                        logger.info("\n".join(self.dag.stats()))
                 else:
                     logger.info(NOTHING_TO_BE_DONE_MSG)
                     return
             else:
                 # the dryrun case
                 if len(self.dag):
-                    logger.run_info("\n".join(self.dag.stats()))
+                    logger.info("\n".join(self.dag.stats()))
                 else:
                     logger.info(NOTHING_TO_BE_DONE_MSG)
                     return
@@ -1207,7 +1207,8 @@ class Workflow(WorkflowExecutorInterface):
                     return
 
             if not self.dryrun and not self.execution_settings.no_hooks:
-                self._onstart(logger.get_logfile())
+                # self._onstart(logger.get_logfile())
+                pass
 
             def log_provenance_info():
                 provenance_triggered_jobs = [
@@ -1260,7 +1261,7 @@ class Workflow(WorkflowExecutorInterface):
             if success:
                 if self.dryrun:
                     if len(self.dag):
-                        logger.run_info("\n".join(self.dag.stats()))
+                        logger.info("\n".join(self.dag.stats()))
                         self.dag.print_reasons()
                         log_provenance_info()
                     logger.info("")
@@ -1275,13 +1276,16 @@ class Workflow(WorkflowExecutorInterface):
                             "jobs (e.g. adding more jobs) after their completion."
                         )
                 else:
-                    logger.logfile_hint()
+                    # logger.logfile_hint()
+                    pass
                 if not self.dryrun and not self.execution_settings.no_hooks:
-                    self._onsuccess(logger.get_logfile())
+                    # self._onsuccess(logger.get_logfile())
+                    pass
             else:
                 if not self.dryrun and not self.execution_settings.no_hooks:
-                    self._onerror(logger.get_logfile())
-                logger.logfile_hint()
+                    # self._onerror(logger.get_logfile())
+                    pass
+                # logger.logfile_hint()
                 raise WorkflowError("At least one job did not complete successfully.")
 
     @property
