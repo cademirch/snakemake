@@ -49,7 +49,7 @@ from snakemake_interface_report_plugins.registry import ReportPluginRegistry
 
 from snakemake.workflow import Workflow
 from snakemake.exceptions import print_exception
-from snakemake.logging import logger
+from snakemake.logging import logger, logger_config
 from snakemake.shell import shell
 from snakemake.common import (
     MIN_PY_VERSION,
@@ -578,8 +578,12 @@ class DAGApi(ApiBase):
             or (os.name not in ["posix"])
             or not executor_plugin.common_settings.local_exec
         )
-
-        # logger.setup_logfile()
+        if (
+            self.workflow_api.workflow_settings.exec_mode == ExecMode.DEFAULT
+            and not executor_plugin.common_settings.dryrun_exec
+        ):
+            logger_config.setup_logfile()
+            
 
         workflow = self.workflow_api._workflow
         workflow.execution_settings = execution_settings

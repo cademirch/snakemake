@@ -14,13 +14,20 @@ import threading
 from functools import partial
 import inspect
 import textwrap
-from loguru import logger as _logger
+from loguru import logger
 from rich.console import Console
+from rich.logging import RichHandler
+from rich.theme import Theme
 
-console = Console(stderr=True)
+LOG_THEME = Theme({"logging.level.info": "green", "logging.level.debug":"cyan", "log.time": "green"})
+console = Console(stderr=True, theme=LOG_THEME)
 
 
 class LoggerConfig:
+    """
+    Manages logging output. Should only be inited once.
+    """
+
     def __init__(self) -> None:
         from snakemake_interface_executor_plugins.settings import ExecMode
 
@@ -29,45 +36,88 @@ class LoggerConfig:
         self.debug_dag = False
         self.quiet = set()
         self.logfile = None
+        self.json_logfile = None
         self.last_msg_was_job_info = False
         self.mode = ExecMode.DEFAULT
         self.show_failed_logs = False
         self.logfile_handler = None
+        self.jsonfile_handler = None
+        self.stderr_handler = None
         self.dryrun = False
         self._setup_logger()
 
-    def _setup_logger(self):
-        _logger.remove()
-        _logger.add(
-            console.print,
-            level="TRACE",
+    def _setup_logger(self) -> None:
+        """Sets up the stderr logger."""
+        logger.remove()
+        handler = RichHandler(console=console, markup=True, highlighter=None)
+        self.stderr_handler = logger.add(
+            handler,
+            level="INFO",
             format=self._log_formatter,
             colorize=True,
         )
 
     def _log_formatter(self, record: dict) -> str:
         """
-        Log message formatter
+        Log message formatter for console output.
         Source: https://github.com/Textualize/rich/issues/2416#issuecomment-1193773381
         """
         color_map = {
             "TRACE": "dim blue",
             "DEBUG": "cyan",
-            "INFO": "bold",
+            "INFO": "green",
             "SUCCESS": "bold green",
             "WARNING": "yellow",
             "ERROR": "bold red",
             "CRITICAL": "bold white on red",
         }
         lvl_color = color_map.get(record["level"].name, "cyan")
-        return (
-            "[not bold green]{time:YYYY/MM/DD HH:mm:ss}[/not bold green] | {level.icon}"
-            + f"  - [{lvl_color}]{{message}}[/{lvl_color}]"
+        return f"[{lvl_color}]{{message}}[/{lvl_color}]"
+
+    def setup_logfile(self) -> None:
+        os.makedirs(os.path.join(".snakemake", "log"), exist_ok=True)
+        now = datetime.datetime.now().isoformat().replace(":", "")
+        self.logfile = os.path.abspath(
+            os.path.join(
+                ".snakemake",
+                "log",
+                now
+                + ".snakemake.log",
+            )
         )
+        self.json_logfile = os.path.abspath(
+            os.path.join(
+                ".snakemake",
+                "log",
+                now
+                + ".snakemake.log.jsonl",
+            )
+        )
+
+        self.logfile_handler = logger.add(
+            self.logfile,
+            level="TRACE",
+            colorize=False,
+        )
+        self.jsonfile_handler = logger.add(
+            self.json_logfile,
+            level="TRACE",
+            serialize=True,
+            colorize=False,
+            compression="gz"
+        )
+    def cleanup(self):
+        if self.logfile is not None:
+            logger.remove(self.logfile_handler)
+            logger.remove(self.jsonfile_handler)
+    def get_logfile(self):
+        return self.logfile
+
+    
 
 
 logger_config = LoggerConfig()
-logger = _logger
+
 
 
 def get_default_exec_mode():
@@ -554,7 +604,7 @@ def format_percentage(done, total):
 # logger = Logger()
 
 
-# def setup_logger(
+# def setuplogger(
 #     handler=[],
 #     quiet=False,
 #     printshellcmds=False,

@@ -50,7 +50,7 @@ from snakemake_interface_common.plugin_registry.plugin import TaggedSettings
 from snakemake_interface_report_plugins.settings import ReportSettingsBase
 from snakemake_interface_report_plugins.registry.plugin import Plugin as ReportPlugin
 
-from snakemake.logging import logger, format_resources
+from snakemake.logging import logger, format_resources, logger_config
 from snakemake.rules import Rule, Ruleorder, RuleProxy
 from snakemake.exceptions import (
     CreateCondaEnvironmentException,
@@ -1207,8 +1207,8 @@ class Workflow(WorkflowExecutorInterface):
                     return
 
             if not self.dryrun and not self.execution_settings.no_hooks:
-                # self._onstart(logger.get_logfile())
-                pass
+                self._onstart(logger_config.get_logfile())
+
 
             def log_provenance_info():
                 provenance_triggered_jobs = [
@@ -1276,16 +1276,16 @@ class Workflow(WorkflowExecutorInterface):
                             "jobs (e.g. adding more jobs) after their completion."
                         )
                 else:
-                    # logger.logfile_hint()
-                    pass
+                    logger.info(f"Complete log: {os.path.relpath(logger_config.get_logfile())}")
+                    
                 if not self.dryrun and not self.execution_settings.no_hooks:
-                    # self._onsuccess(logger.get_logfile())
-                    pass
+                    self._onerror(logger_config.get_logfile())
+                    
             else:
                 if not self.dryrun and not self.execution_settings.no_hooks:
-                    # self._onerror(logger.get_logfile())
-                    pass
-                # logger.logfile_hint()
+                    self._onerror(logger_config.get_logfile())
+                    
+                logger.info(f"Complete log: {os.path.relpath(logger_config.get_logfile())}")
                 raise WorkflowError("At least one job did not complete successfully.")
 
     @property
