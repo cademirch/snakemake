@@ -49,7 +49,7 @@ from snakemake_interface_report_plugins.registry import ReportPluginRegistry
 
 from snakemake.workflow import Workflow
 from snakemake.exceptions import print_exception
-from snakemake.logging import logger, logger_config
+from snakemake.logging import logger, logger_config, progress
 from snakemake.shell import shell
 from snakemake.common import (
     MIN_PY_VERSION,
@@ -160,8 +160,7 @@ class SnakemakeApi(ApiBase):
     def _cleanup(self):
         """Cleanup the workflow."""
         if not self.output_settings.keep_logger:
-            # logger.cleanup()
-            pass
+            progress.stop()
         if self._workflow_api is not None:
             self._workflow_api._workdir_handler.change_back()
             if self._workflow_api._workflow_store is not None:
@@ -583,7 +582,8 @@ class DAGApi(ApiBase):
             and not executor_plugin.common_settings.dryrun_exec
         ):
             logger_config.setup_logfile()
-            
+            progress.start()
+        
 
         workflow = self.workflow_api._workflow
         workflow.execution_settings = execution_settings

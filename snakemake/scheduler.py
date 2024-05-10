@@ -21,7 +21,7 @@ from snakemake_interface_executor_plugins.settings import ExecMode
 from snakemake.common import async_run
 
 from snakemake.exceptions import RuleException, WorkflowError, print_exception
-from snakemake.logging import logger
+from snakemake.logging import logger, progress
 
 from fractions import Fraction
 
@@ -787,3 +787,4 @@ class JobScheduler(JobSchedulerExecutorInterface):
     def progress(self):
         """Display the progress."""
         logger.info("progress", done=self.finished_jobs, total=len(self.workflow.dag))
+        progress.update(completed=self.finished_jobs, total=len(self.workflow.dag), refresh=True)

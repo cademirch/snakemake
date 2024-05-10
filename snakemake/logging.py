@@ -14,14 +14,72 @@ import threading
 from functools import partial
 import inspect
 import textwrap
+from typing import Any, Optional, Union
 from loguru import logger
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.theme import Theme
+from rich.progress import GetTimeCallable, Progress as _Progress, ProgressColumn, MofNCompleteColumn, BarColumn, TextColumn
 
-LOG_THEME = Theme({"logging.level.info": "green", "logging.level.debug":"cyan", "log.time": "green"})
+
+LOG_THEME = Theme(
+    {"logging.level.info": "green", "logging.level.debug": "cyan", "log.time": "green"}
+)
 console = Console(stderr=True, theme=LOG_THEME)
 
+class Progress(_Progress):
+    def __init__(
+        self,
+        *columns: str | ProgressColumn,
+        console: Console | None = None,
+        auto_refresh: bool = True,
+        refresh_per_second: float = 10,
+        speed_estimate_period: float = 30,
+        transient: bool = False,
+        redirect_stdout: bool = True,
+        redirect_stderr: bool = True,
+        get_time: GetTimeCallable | None = None,
+        disable: bool = False,
+        expand: bool = False,
+    ) -> None:
+        super().__init__(
+            *columns,
+            console=console,
+            auto_refresh=auto_refresh,
+            refresh_per_second=refresh_per_second,
+            speed_estimate_period=speed_estimate_period,
+            transient=transient,
+            redirect_stdout=redirect_stdout,
+            redirect_stderr=redirect_stderr,
+            get_time=get_time,
+            disable=disable,
+            expand=expand,
+        )
+        self.task_id = self.add_task("Working...", total=None)
+
+    def update(
+        self,
+        *,
+        total: float | None = None,
+        completed: float | None = None,
+        advance: float | None = None,
+        description: str | None = None,
+        visible: bool | None = None,
+        refresh: bool = False,
+        **fields: Any,
+    ) -> None:
+        return super().update(
+            self.task_id,
+            total=total,
+            completed=completed,
+            advance=advance,
+            description=description,
+            visible=visible,
+            refresh=refresh,
+            **fields,
+        )
+
+progress = Progress(*_Progress.get_default_columns()[:-1], MofNCompleteColumn(), console=console)
 
 class LoggerConfig:
     """
@@ -81,16 +139,14 @@ class LoggerConfig:
             os.path.join(
                 ".snakemake",
                 "log",
-                now
-                + ".snakemake.log",
+                now + ".snakemake.log",
             )
         )
         self.json_logfile = os.path.abspath(
             os.path.join(
                 ".snakemake",
                 "log",
-                now
-                + ".snakemake.log.jsonl",
+                now + ".snakemake.log.jsonl",
             )
         )
 
@@ -104,20 +160,19 @@ class LoggerConfig:
             level="TRACE",
             serialize=True,
             colorize=False,
-            compression="gz"
+            compression="gz",
         )
+
     def cleanup(self):
         if self.logfile is not None:
             logger.remove(self.logfile_handler)
             logger.remove(self.jsonfile_handler)
+
     def get_logfile(self):
         return self.logfile
 
-    
-
 
 logger_config = LoggerConfig()
-
 
 
 def get_default_exec_mode():
