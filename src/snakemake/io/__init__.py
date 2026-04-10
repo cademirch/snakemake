@@ -359,6 +359,11 @@ class _IOFile(str, AnnotatedStringInterface):
     async def _local_inventory(self, cache: IOCache):
         # for local files, perform BFS via os.scandir to determine existence of files
         if cache.remaining_wait_time <= 0:
+            logger.info(
+                "Inventory budget exhausted; remaining files will use "
+                "per-file stats. Consider increasing --max-inventory-wait-time "
+                "if DAG construction is slow on networked filesystems."
+            )
             # No more time to create inventory.
             return
 
@@ -382,6 +387,24 @@ class _IOFile(str, AnnotatedStringInterface):
                 with os.scandir(path) as scan:
                     for entry in scan:
                         cache.exists_local[entry.path] = True
+                        # Capture mtime and size inline from the DirEntry.
+                        # On networked filesystems (CephFS, NFS, Lustre) the
+                        # stat data is returned with the readdir reply, so
+                        # this is free — no additional RPC. This populates
+                        # the mtime and size caches so that subsequent
+                        # mtime_inventory calls become no-ops for regular
+                        # files under scanned parents.
+                        try:
+                            st = entry.stat(follow_symlinks=False)
+                            if stat.S_ISREG(st.st_mode):
+                                cache._mtime[entry.path] = Mtime(local=st.st_mtime)
+                                cache._size[entry.path] = st.st_size
+                        except OSError:
+                            # Entry vanished between readdir and stat, or
+                            # we lack permission to stat it. Existence is
+                            # still valid from the readdir; just skip the
+                            # mtime/size population for this entry.
+                            pass
                 cache.exists_local[path] = True
                 cache.exists_local.has_inventory.add(path)
             except FileNotFoundError:
